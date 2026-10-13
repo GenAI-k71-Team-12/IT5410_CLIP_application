@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","id":"flickr30k_karpathy:000001","dataset":"flickr30k_karpathy","source_id":"000001","split":"test","image_path":"images/000001.jpg","thumbnail_path":null,"width":640,"height":480,"captions":[{"text":"Illustrative caption for a sample image.","language":"en"}],"license":null,"source_url":null}

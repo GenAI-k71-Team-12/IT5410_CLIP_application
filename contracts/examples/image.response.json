@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "id": "demo:001",
+    "dataset": "demo",
+    "split": "test",
+    "width": 640,
+    "height": 400,
+    "captions": [
+      {
+        "text": "Synthetic placeholder: dog",
+        "language": "en"
+      }
+    ],
+    "image_url": "/media/001.svg",
+    "thumbnail_url": "/media/001.svg"
+  },
+  "timestamp": "2026-10-13T03:50:00.000Z"
+}

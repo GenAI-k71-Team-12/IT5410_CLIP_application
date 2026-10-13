@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "Caption": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 10000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "language": {
+          "enum": [
+            "en",
+            "vi",
+            "und"
+          ],
+          "title": "Language",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "language"
+      ],
+      "title": "Caption",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 160,
+      "pattern": "^[a-z0-9][a-z0-9_-]*:[A-Za-z0-9_-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "dataset": {
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Dataset",
+      "type": "string"
+    },
+    "source_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Source Id",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "train",
+        "val",
+        "test",
+        "unspecified"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "image_path": {
+      "minLength": 1,
+      "title": "Image Path",
+      "type": "string"
+    },
+    "thumbnail_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Thumbnail Path"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/Caption"
+      },
+      "minItems": 1,
+      "title": "Captions",
+      "type": "array"
+    },
+    "license": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License"
+    },
+    "source_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Url"
+    }
+  },
+  "required": [
+    "id",
+    "dataset",
+    "source_id",
+    "split",
+    "image_path",
+    "width",
+    "height",
+    "captions"
+  ],
+  "title": "Metadata",
+  "type": "object"
+}

@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","id":"coco2017:1","dataset":"coco2017","source_id":"1","split":"val","image_path":"images/val2017/000000000001.jpg","thumbnail_path":null,"width":640,"height":480,"captions":[{"text":"Illustrative caption for a sample image.","language":"en"}],"license":null,"source_url":null}

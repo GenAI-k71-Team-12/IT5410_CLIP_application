@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "request_id": "739df40c-8be5-4e4b-a9ce-ac7d844f35cf",
+    "api_version": "2.0.0",
+    "mode": "mock",
+    "method": "bm25",
+    "score_type": "bm25_score",
+    "query": "a dog on the beach",
+    "top_k": 3,
+    "offset": 0,
+    "limit": 2,
+    "total": 3,
+    "has_more": true,
+    "next_offset": 2,
+    "index_version": "mock-v1",
+    "results": [
+      {
+        "rank": 1,
+        "image": {
+          "id": "demo:001",
+          "dataset": "demo",
+          "split": "test",
+          "width": 640,
+          "height": 400,
+          "captions": [
+            {
+              "text": "Synthetic placeholder: dog",
+              "language": "en"
+            }
+          ],
+          "image_url": "/media/001.svg",
+          "thumbnail_url": "/media/001.svg"
+        },
+        "score": 9.0,
+        "similarity": null
+      },
+      {
+        "rank": 2,
+        "image": {
+          "id": "demo:002",
+          "dataset": "demo",
+          "split": "test",
+          "width": 640,
+          "height": 400,
+          "captions": [
+            {
+              "text": "Synthetic placeholder: beach",
+              "language": "en"
+            }
+          ],
+          "image_url": "/media/002.svg",
+          "thumbnail_url": "/media/002.svg"
+        },
+        "score": 7.5,
+        "similarity": null
+      }
+    ]
+  },
+  "timestamp": "2026-10-13T03:50:00.000Z"
+}
