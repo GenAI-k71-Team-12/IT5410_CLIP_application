@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "status": "ok",
+    "mode": "mock",
+    "ready": true,
+    "model_loaded": false,
+    "index_loaded": false,
+    "api_version": "2.0.0"
+  },
+  "timestamp": "2026-10-13T03:50:00.000Z"
+}

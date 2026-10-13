@@ -1,0 +1,9 @@
+{
+  "success": false,
+  "statusCode": 422,
+  "message": [
+    "property extraField should not exist"
+  ],
+  "path": "/search",
+  "timestamp": "2026-10-13T03:50:00.000Z"
+}

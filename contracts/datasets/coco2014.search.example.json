@@ -1,0 +1,10 @@
+{
+  "query": "a dog on the beach",
+  "method": "clip",
+  "top_k": 20,
+  "offset": 0,
+  "limit": 10,
+  "min_similarity": null,
+  "dataset": "coco2014",
+  "split": "val"
+}

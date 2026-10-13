@@ -1,0 +1,7 @@
+{
+  "query": "a dog on the beach",
+  "method": "clip",
+  "top_k": 3,
+  "offset": 0,
+  "limit": 2
+}
