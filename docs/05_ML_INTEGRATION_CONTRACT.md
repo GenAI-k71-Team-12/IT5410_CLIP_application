@@ -200,7 +200,10 @@ và checksum trong files khi triển khai. File manifest hiện chưa có schema
 ### 4.3. Build và cache offline
 
 Lệnh build nhận metadata, `dataset_root`, dataset, splits, subset nếu có, model config,
-batch_size, device và `artifact_dir`. Người triển khai bàn giao tên module và lệnh CLI.
+batch_size, device và `artifact_dir`. Module `clip_retrieval.ml.build_index` (lệnh
+`python -m clip_retrieval.ml.build_index --help`); kiểm tra artifact bằng
+`python -m clip_retrieval.ml.artifact <artifact_dir> --check-model`. Artifact có thêm
+`tokenizer_config.json` và `preprocess_config.json`, khai báo trong `files` của manifest.
 
 Batch encode giữ thứ tự ID đã quy định. Cache embedding chỉ được tái sử dụng khi
 checksum nội dung ảnh và fingerprint model/weights/preprocess cùng khớp.
