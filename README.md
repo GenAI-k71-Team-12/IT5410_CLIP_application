@@ -120,3 +120,4 @@ Cập nhật TypeScript client, ví dụ, kiểm thử và tài liệu trong cù
 - [Đặc tả API](docs/03_ENDPOINT_CONTRACTS.md)
 - [Đặc tả ánh xạ dataset](docs/04_DATASET_MAPPING.md)
 - [Đặc tả tích hợp ML và backend](docs/05_ML_INTEGRATION_CONTRACT.md)
+- [Quy ước lưu trữ và chia sẻ dữ liệu](docs/06_SHARED_DATA.md)
