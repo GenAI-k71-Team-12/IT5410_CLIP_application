@@ -232,6 +232,8 @@ class RetrievalEngine(Protocol):
 ```
 
 Giao diện hoạt động đồng bộ. Tác vụ encode/search không chạy trực tiếp trên async event loop.
+Bản triển khai: `clip_retrieval.ml.engine.ClipRetrievalEngine.from_artifact(artifact_dir, device)`.
+Engine trả `EngineNotReady` cho method=bm25 cho tới khi thành phần BM25 được tích hợp.
 Cấu hình thread, process hoặc worker được xác định khi tích hợp.
 
 ### 5.1. search_text
