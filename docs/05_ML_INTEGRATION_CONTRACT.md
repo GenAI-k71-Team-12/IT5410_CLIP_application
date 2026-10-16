@@ -51,7 +51,7 @@ Mỗi ảnh tạo một embedding trong `embeddings.npy`, độc lập với s�
 | Model | ViT-B/32 theo kế hoạch dự án |
 | Số chiều baseline | 512; kiểm tra với output của model thực tế |
 | Checkpoint | Pretrained CLIP; ghi định danh và SHA-256 trong manifest |
-| Thư viện | Chưa lựa chọn. Ghi tên và phiên bản khi triển khai |
+| Thư viện | `open_clip_torch` 3.3.0, model `ViT-B-32`, weights `openai` (`requirements-ml.txt`); triển khai tại `clip_retrieval.ml.encoder.ClipEncoder` |
 | Tiền xử lý ảnh | Pipeline đi kèm checkpoint đã chọn |
 | Tokenizer | Tokenizer đi kèm model/checkpoint đã chọn |
 | Thực thi | Chế độ inference, không tính gradient |
