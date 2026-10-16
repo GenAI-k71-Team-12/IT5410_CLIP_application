@@ -35,12 +35,17 @@ class ClipEncoder:
         from open_clip.tokenizer import default_bpe
 
         self.device = device
+        weights_cfg = get_pretrained_cfg(model, pretrained)
+        # open_clip only warns when weights were trained with QuickGELU (e.g. "openai").
         self.model, _, self.preprocess = open_clip.create_model_and_transforms(
-            model, pretrained=pretrained, device=device
+            model,
+            pretrained=pretrained,
+            device=device,
+            force_quick_gelu=weights_cfg.get("quick_gelu", False),
         )
         self.model.eval()
         self.tokenizer = open_clip.get_tokenizer(model)
-        weights = download_pretrained(get_pretrained_cfg(model, pretrained))
+        weights = download_pretrained(weights_cfg)
         tokenizer_config = {
             "class": type(self.tokenizer).__qualname__,
             "bpe_vocab_sha256": sha256_file(Path(default_bpe())),

@@ -22,6 +22,11 @@ def test_embeddings_are_unit_float32(encoder):
         np.testing.assert_allclose(np.linalg.norm(vectors, axis=1), 1, atol=1e-4)
 
 
+def test_openai_weights_run_with_their_quickgelu_activation(encoder):
+    activations = {type(module).__name__ for module in encoder.model.modules()}
+    assert "QuickGELU" in activations and "GELU" not in activations
+
+
 def test_text_matches_its_colour(encoder):
     images = encoder.encode_images([Image.new("RGB", (64, 64), c) for c in ("red", "green")])
     scores = images @ encoder.encode_text("a photo of the color red")[0]
