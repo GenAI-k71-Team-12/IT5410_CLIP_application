@@ -67,6 +67,20 @@ def test_cache_skips_unchanged_images_and_is_keyed_by_model(tmp_path):
     assert other.images_encoded == 5
 
 
+def test_cache_keeps_finished_batches_when_a_late_image_fails_to_decode(tmp_path):
+    records = write_dataset(tmp_path / "data")
+    last = tmp_path / "data/images/e1.png"
+    good = last.read_bytes()
+    last.write_bytes(good[:45])  # header still readable, pixel data truncated
+    encoder = FakeEncoder()
+    with pytest.raises(OSError):
+        build_toy(tmp_path, encoder=encoder, records=records)
+    assert encoder.images_encoded == 4
+    last.write_bytes(good)
+    build_toy(tmp_path, encoder=encoder, records=records)
+    assert encoder.images_encoded == 5  # only e1 is encoded again
+
+
 def test_existing_artifact_version_is_never_overwritten(tmp_path):
     records = write_dataset(tmp_path / "data")
     build_toy(tmp_path, records=records)

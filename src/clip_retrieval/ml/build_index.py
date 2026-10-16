@@ -113,12 +113,16 @@ def build_artifact(
     cache = load_cache(cache_path) if cache_path else {}
     unique = dict(zip(hashes, paths, strict=True))
     missing = [(digest, path) for digest, path in unique.items() if digest not in cache]
-    for start in range(0, len(missing), batch_size):
-        batch = missing[start : start + batch_size]
-        vectors = encoder.encode_images([decode_rgb(path) for _, path in batch])
-        cache.update(zip([digest for digest, _ in batch], vectors, strict=True))
-    if cache_path and missing:
-        save_cache(cache_path, cache)
+    cached_before = len(cache)
+    try:
+        for start in range(0, len(missing), batch_size):
+            batch = missing[start : start + batch_size]
+            vectors = encoder.encode_images([decode_rgb(path) for _, path in batch])
+            cache.update(zip([digest for digest, _ in batch], vectors, strict=True))
+    finally:
+        # Keep finished batches even when a later image fails or the build is interrupted.
+        if cache_path and len(cache) > cached_before:
+            save_cache(cache_path, cache)
     embeddings = np.stack([cache[digest] for digest in hashes]).astype(np.float32)
 
     staging = artifacts_root / f".tmp-{artifact_version}"
