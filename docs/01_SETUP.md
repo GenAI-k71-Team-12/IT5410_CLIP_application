@@ -53,8 +53,9 @@ export CLIP_CORS_ORIGINS=http://localhost:3000
 | Nhánh sửa lỗi | fix/<description> |
 | Nhánh tài liệu | docs/<description> |
 | Tiền tố commit | feat:, fix:, docs:, test:, chore: |
-| Pull request | Tạo vào main, nêu thay đổi và kết quả kiểm tra, có ít nhất một thành viên review |
-| Kiểm tra bắt buộc | Theo `.github/workflows/ci.yml` |
+| Pull request | Tạo vào dev, nêu thay đổi và kết quả kiểm tra, có ít nhất một thành viên approve |
+| Đưa lên main | Chỉ qua pull request từ dev; leader (@hoangtung386, khai báo trong `.github/CODEOWNERS`) review, approve và merge |
+| Kiểm tra bắt buộc | `test (3.11)`, `test (3.12)` theo `.github/workflows/ci.yml`; pull request vào main thêm `source-is-dev` theo `.github/workflows/main-source-guard.yml` |
 
 Pull request thay đổi schema phải bao gồm model, OpenAPI/JSON Schema, TypeScript client,
 ví dụ, tài liệu và kiểm thử liên quan. Thay đổi không tương thích phải
@@ -62,4 +63,5 @@ có phiên bản API mới. Metadata và API được quản lý phiên bản đ
 
 Credential, .env, virtualenv, dataset và tệp model/index lớn không thuộc phạm vi lưu trữ trong Git.
 Đường dẫn trong metadata phải tương đối với thư mục gốc dữ liệu.
-Quản trị repository thiết lập kiểm tra CI và review bắt buộc bằng branch protection khi được hỗ trợ.
+Branch protection của main và dev áp dụng cả với admin: cấm push trực tiếp, force-push và xóa nhánh;
+chỉ leader được merge vào main.

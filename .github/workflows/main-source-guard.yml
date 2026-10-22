@@ -1,0 +1,21 @@
+name: main-source-guard
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+permissions: {}
+jobs:
+  source-is-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only dev may be merged into main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "Pull requests into main must come from $BASE_REPO:dev, not $HEAD_REPO:$HEAD_REF."
+            echo "Change the base branch of this pull request to dev."
+            exit 1
+          fi
