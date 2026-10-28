@@ -33,21 +33,18 @@ from clip_retrieval.contracts import Caption, Metadata
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SELECTION_TEMPLATE = REPO_ROOT / "contracts/datasets/dataset-selection.template.json"
 
+# Dự án chỉ dùng COCO 2017 nên chỉ khai báo URL của bản 2017.
 # URL tải annotation được đặc tả chấp nhận tại docs/04_DATASET_MAPPING.md mục 1.1.
 ALLOWED_SOURCE_URLS = {
-    "2014": "http://images.cocodataset.org/annotations/annotations_trainval2014.zip",
     "2017": "http://images.cocodataset.org/annotations/annotations_trainval2017.zip",
 }
 USAGE_TERMS_URLS = {
-    "2014": "https://cocodataset.org/#termsofuse",
     "2017": "https://cocodataset.org/#termsofuse",
 }
 IMAGE_ROOT_URLS = {
-    "2014": "http://images.cocodataset.org/zips/train2014.zip",
     "2017": "http://images.cocodataset.org/zips/train2017.zip",
 }
 IMAGE_ROOT_URLS_VAL = {
-    "2014": "http://images.cocodataset.org/zips/val2014.zip",
     "2017": "http://images.cocodataset.org/zips/val2017.zip",
 }
 
