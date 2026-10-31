@@ -27,13 +27,15 @@ from clip_retrieval.contracts import (
     SimilarRequest,
     SuccessResponse,
 )
+from clip_retrieval.retrieval import EngineNotReady, ImageNotFound, RankedImage, RetrievalEngine
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def create_app(mode: str | None = None) -> FastAPI:
+def create_app(mode: str | None = None, engine: RetrievalEngine | None = None) -> FastAPI:
+    # An injected engine serves /similar for real; startup loading belongs to real-mode setup.
     mode = mode or os.getenv("CLIP_MODE", "mock")
-    if mode != "mock":
+    if mode != "mock" and engine is None:
         raise RuntimeError(
             "Only mock mode is implemented; real engine must be integrated explicitly"
         )
@@ -100,6 +102,14 @@ def create_app(mode: str | None = None) -> FastAPI:
     async def http_error(request: Request, exc: StarletteHTTPException):
         return error(request, exc.status_code, [str(exc.detail)], exc.headers)
 
+    @app.exception_handler(ImageNotFound)
+    async def image_not_found(request: Request, exc: ImageNotFound):
+        return error(request, 404, ["Image not found"])
+
+    @app.exception_handler(EngineNotReady)
+    async def engine_not_ready(request: Request, exc: EngineNotReady):
+        return error(request, 503, ["Retrieval engine is not ready"])
+
     @app.exception_handler(Exception)
     async def internal_error(request: Request, exc: Exception):
         logging.getLogger(__name__).error(
@@ -156,44 +166,53 @@ def create_app(mode: str | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Image not found")
         return images[image_id]
 
-    def response(params: SearchRequest, request: Request, exclude=None):
+    def mock_rank(params: SearchRequest, exclude=None) -> list[RankedImage]:
         # Fixed scores are test fixtures; query does not change ordering in mock mode.
         pool = [
-            (item, 0.9 - i * 0.15)
+            RankedImage(item.id, 0.9 - i * 0.15)
             for i, item in enumerate(images.values())
             if item.id != exclude
             and (params.dataset is None or item.dataset == params.dataset)
             and (params.split is None or item.split == params.split)
         ]
         if params.method == "bm25":
-            pool = [(item, round(score * 10, 6)) for item, score in pool]
+            pool = [RankedImage(hit.image_id, round(hit.score * 10, 6)) for hit in pool]
         if params.min_similarity is not None:
-            pool = [(item, score) for item, score in pool if score >= params.min_similarity]
-        pool.sort(key=lambda pair: (-pair[1], pair[0].id))
-        pool = pool[: params.top_k]
+            pool = [hit for hit in pool if hit.score >= params.min_similarity]
+        pool.sort(key=lambda hit: (-hit.score, hit.image_id))
+        return pool[: params.top_k]
+
+    def page(
+        params: SearchRequest,
+        request: Request,
+        ranked: list[RankedImage],
+        query: str | None,
+        mode: str = "mock",
+        index_version: str = "mock-v1",
+    ):
         hits = [
             SearchHit(
                 rank=i + params.offset + 1,
-                image=item,
-                score=round(score, 6),
-                similarity=round(score, 6) if params.method == "clip" else None,
+                image=images[hit.image_id],
+                score=round(hit.score, 6),
+                similarity=round(hit.score, 6) if params.method == "clip" else None,
             )
-            for i, (item, score) in enumerate(pool[params.offset : params.offset + params.limit])
+            for i, hit in enumerate(ranked[params.offset : params.offset + params.limit])
         ]
         end = params.offset + len(hits)
         return SearchResponse(
             request_id=request.state.request_id,
-            mode="mock",
+            mode=mode,
             method=params.method,
             score_type="cosine_similarity" if params.method == "clip" else "bm25_score",
-            query=None if exclude else params.query,
+            query=query,
             top_k=params.top_k,
             offset=params.offset,
             limit=params.limit,
-            total=len(pool),
-            has_more=end < len(pool),
-            next_offset=end if end < len(pool) else None,
-            index_version="mock-v1",
+            total=len(ranked),
+            has_more=end < len(ranked),
+            next_offset=end if end < len(ranked) else None,
+            index_version=index_version,
             results=hits,
         )
 
@@ -205,7 +224,9 @@ def create_app(mode: str | None = None) -> FastAPI:
         summary="Search images by text (CLIP or BM25)",
     )
     def search(params: SearchRequest, request: Request, query: Annotated[NoQuery, Query()]):
-        return SuccessResponse[SearchResponse](data=response(params, request))
+        return SuccessResponse[SearchResponse](
+            data=page(params, request, mock_rank(params), params.query)
+        )
 
     @app.get(
         "/images/{image_id}",
@@ -231,7 +252,12 @@ def create_app(mode: str | None = None) -> FastAPI:
     ):
         require_image(image_id)
         params = SearchRequest(query="similar", **filters.model_dump())
-        return SuccessResponse[SearchResponse](data=response(params, request, exclude=image_id))
+        if engine is None:
+            data = page(params, request, mock_rank(params, exclude=image_id), None)
+        else:
+            ranked = engine.search_similar(image_id, params)
+            data = page(params, request, ranked, None, "real", engine.index_version)
+        return SuccessResponse[SearchResponse](data=data)
 
     # StaticFiles mounts are not exported by FastAPI; describe the media endpoint explicitly.
     default_openapi = app.openapi

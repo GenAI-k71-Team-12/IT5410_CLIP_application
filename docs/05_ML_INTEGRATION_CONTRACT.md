@@ -51,7 +51,7 @@ Mỗi ảnh tạo một embedding trong `embeddings.npy`, độc lập với s�
 | Model | ViT-B/32 theo kế hoạch dự án |
 | Số chiều baseline | 512; kiểm tra với output của model thực tế |
 | Checkpoint | Pretrained CLIP; ghi định danh và SHA-256 trong manifest |
-| Thư viện | Chưa lựa chọn. Ghi tên và phiên bản khi triển khai |
+| Thư viện | `open_clip_torch` 3.3.0, model `ViT-B-32`, weights `openai` (`requirements-ml.txt`); triển khai tại `clip_retrieval.ml.encoder.ClipEncoder` |
 | Tiền xử lý ảnh | Pipeline đi kèm checkpoint đã chọn |
 | Tokenizer | Tokenizer đi kèm model/checkpoint đã chọn |
 | Thực thi | Chế độ inference, không tính gradient |
@@ -200,7 +200,10 @@ và checksum trong files khi triển khai. File manifest hiện chưa có schema
 ### 4.3. Build và cache offline
 
 Lệnh build nhận metadata, `dataset_root`, dataset, splits, subset nếu có, model config,
-batch_size, device và `artifact_dir`. Người triển khai bàn giao tên module và lệnh CLI.
+batch_size, device và `artifact_dir`. Module `clip_retrieval.ml.build_index` (lệnh
+`python -m clip_retrieval.ml.build_index --help`); kiểm tra artifact bằng
+`python -m clip_retrieval.ml.artifact <artifact_dir> --check-model`. Artifact có thêm
+`tokenizer_config.json` và `preprocess_config.json`, khai báo trong `files` của manifest.
 
 Batch encode giữ thứ tự ID đã quy định. Cache embedding chỉ được tái sử dụng khi
 checksum nội dung ảnh và fingerprint model/weights/preprocess cùng khớp.
@@ -229,6 +232,8 @@ class RetrievalEngine(Protocol):
 ```
 
 Giao diện hoạt động đồng bộ. Tác vụ encode/search không chạy trực tiếp trên async event loop.
+Bản triển khai: `clip_retrieval.ml.engine.ClipRetrievalEngine.from_artifact(artifact_dir, device)`.
+Engine trả `EngineNotReady` cho method=bm25 cho tới khi thành phần BM25 được tích hợp.
 Cấu hình thread, process hoặc worker được xác định khi tích hợp.
 
 ### 5.1. search_text

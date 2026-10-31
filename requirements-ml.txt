@@ -1,0 +1,7 @@
+# ML dependencies for the CLIP/FAISS engine, tested on Windows/Python 3.12 (CPU torch).
+-r requirements.txt
+faiss-cpu==1.15.1
+numpy==2.5.4
+open_clip_torch==3.3.0
+pillow==12.3.0
+torch==2.14.1
