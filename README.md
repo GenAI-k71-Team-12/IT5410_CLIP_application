@@ -54,6 +54,7 @@ Health trong chế độ mock trả `data`.`mode=mock`, `data`.model_loaded=fals
 | `requirements.txt` | Dependency chạy ứng dụng |
 | `requirements-dev.txt` | Dependency chạy ứng dụng và công cụ kiểm thử |
 | `requirements-lock.txt` | Phiên bản dependency dùng cho cài đặt và CI |
+| `requirements-ml.txt` | Dependency CLIP/FAISS cho phần ML; cài thêm khi build hoặc chạy engine thật |
 
 Bản hiện tại đã được kiểm tra trên Windows/Python 3.12. Kết quả Linux/Python 3.12
 được ghi nhận cho bản nền tảng API 1.0.0. CI được cấu hình cho Python 3.11 và 3.12.
@@ -120,3 +121,4 @@ Cập nhật TypeScript client, ví dụ, kiểm thử và tài liệu trong cù
 - [Đặc tả API](docs/03_ENDPOINT_CONTRACTS.md)
 - [Đặc tả ánh xạ dataset](docs/04_DATASET_MAPPING.md)
 - [Đặc tả tích hợp ML và backend](docs/05_ML_INTEGRATION_CONTRACT.md)
+- [Quy ước lưu trữ và chia sẻ dữ liệu](docs/06_SHARED_DATA.md)
