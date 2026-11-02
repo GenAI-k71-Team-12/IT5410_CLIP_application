@@ -13,3 +13,5 @@ data/processed/*
 !data/processed/.gitkeep
 artifacts/*
 !artifacts/.gitkeep
+.superpowers/
+docs/superpowers/
