@@ -1,8 +1,8 @@
-"""Chuyển đổi annotation COCO Captions thành Metadata 1.0.0 (JSONL).
+"""Chuyển đổi annotation COCO Captions 2017 thành Metadata 1.0.0 (JSONL).
 
-Áp dụng quy tắc tại docs/04_DATASET_MAPPING.md mục 2 (COCO Captions 2017) và mục 3
-(COCO Captions 2014). Script chỉ dùng tệp captions_*.json; không dùng instances hoặc
-person_keypoints (mục 1.1 quy tắc 5).
+Áp dụng quy tắc tại docs/04_DATASET_MAPPING.md mục 2 (COCO Captions 2017). Script chỉ
+dùng tệp captions_*.json; không dùng instances hoặc person_keypoints (mục 1.1 quy tắc 5).
+Chỉ hỗ trợ bản 2017: tệp captions_<split>2014.json bị từ chối.
 
 Mọi bản ghi đầu ra được kiểm tra bằng model Pydantic Metadata nên tự động tuân thủ
 đặc tả dữ liệu 1.0.0.
@@ -10,8 +10,8 @@ Mọi bản ghi đầu ra được kiểm tra bằng model Pydantic Metadata nê
 Ví dụ:
 
     python scripts/convert_coco_annotations.py \\
-        --annotation D:/study/nam_5/LLM/annotations/captions_val2017.json \\
-        --annotation D:/study/nam_5/LLM/annotations/captions_train2017.json \\
+        --annotation data/raw/coco2017/annotations/captions_train2017.json \\
+        --annotation data/raw/coco2017/annotations/captions_val2017.json \\
         --dataset coco2017 --release 2017 \\
         --output-dir data/processed/coco2017
 """
@@ -33,19 +33,13 @@ from clip_retrieval.contracts import Caption, Metadata
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SELECTION_TEMPLATE = REPO_ROOT / "contracts/datasets/dataset-selection.template.json"
 
-# Dự án chỉ dùng COCO 2017 nên chỉ khai báo URL của bản 2017.
-# URL tải annotation được đặc tả chấp nhận tại docs/04_DATASET_MAPPING.md mục 1.1.
-ALLOWED_SOURCE_URLS = {
-    "2017": "http://images.cocodataset.org/annotations/annotations_trainval2017.zip",
-}
-USAGE_TERMS_URLS = {
-    "2017": "https://cocodataset.org/#termsofuse",
-}
+# Chỉ hỗ trợ COCO Captions 2017; URL theo docs/04_DATASET_MAPPING.md mục 1.1.
+SUPPORTED_RELEASE = 2017
+SOURCE_ANNOTATION_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
+USAGE_TERMS_URL = "https://cocodataset.org/#termsofuse"
 IMAGE_ROOT_URLS = {
-    "2017": "http://images.cocodataset.org/zips/train2017.zip",
-}
-IMAGE_ROOT_URLS_VAL = {
-    "2017": "http://images.cocodataset.org/zips/val2017.zip",
+    "train": "http://images.cocodataset.org/zips/train2017.zip",
+    "val": "http://images.cocodataset.org/zips/val2017.zip",
 }
 
 ANNOTATION_NAME = re.compile(r"^captions_(train|val)(2014|2017)\.json$")
@@ -71,8 +65,17 @@ def detect_split_and_year(
 ) -> tuple[str, int]:
     """Suy ra split và năm phát hành từ tên tệp annotation."""
     match = ANNOTATION_NAME.match(path.name)
+    file_year = int(match.group(2)) if match else None
+
+    # Chặn theo tên tệp trước khi áp dụng --release, nếu không cờ này che mất bản 2014.
+    if file_year is not None and file_year != SUPPORTED_RELEASE:
+        raise ConversionError(
+            f"Chỉ hỗ trợ COCO Captions {SUPPORTED_RELEASE}. "
+            f"Tệp '{path.name}' thuộc bản {file_year}."
+        )
+
     if match:
-        split, year = match.group(1), int(match.group(2))
+        split, year = match.group(1), file_year
     else:
         if override_split is None or override_year is None:
             raise ConversionError(
@@ -87,6 +90,8 @@ def detect_split_and_year(
         year = override_year
     if split not in SPLIT_VALUES:
         raise ConversionError(f"Split không hợp lệ '{split}'. Chỉ nhận {SPLIT_VALUES}.")
+    if year != SUPPORTED_RELEASE:
+        raise ConversionError(f"Chỉ hỗ trợ COCO Captions {SUPPORTED_RELEASE}; nhận được {year}.")
     return split, year
 
 
@@ -232,7 +237,10 @@ def read_image_size(path: Path) -> tuple[int, int] | None:
                 marker = handle.read(1)
                 while marker == b"\xff":
                     marker = handle.read(1)
-                if marker in (b"\xd8", b"\xd9"):
+                if not marker:
+                    return None
+                # RSTn (0xD0-0xD7), TEM (0x01), SOI và EOI không có trường độ dài.
+                if marker[0] in (0x01, 0xD8, 0xD9) or 0xD0 <= marker[0] <= 0xD7:
                     continue
                 size_bytes = handle.read(2)
                 if len(size_bytes) != 2:
@@ -289,12 +297,17 @@ def verify_images(
 
 
 def write_metadata(records: list[Metadata], path: Path) -> None:
-    """Ghi metadata.jsonl, sắp theo Metadata.id tăng dần theo thứ tự chuỗi."""
+    """Ghi metadata.jsonl qua tệp tạm rồi replace, không để lại tệp dở dang."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        for record in records:
-            payload = json.dumps(record.model_dump(), ensure_ascii=False, separators=(",", ":"))
-            handle.write(f"{payload}\n")
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
+            for record in records:
+                payload = json.dumps(record.model_dump(), ensure_ascii=False, separators=(",", ":"))
+                handle.write(f"{payload}\n")
+        tmp_path.replace(path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def create_output_dirs(output_dir: Path, splits: list[str], year: int | None) -> None:
@@ -339,7 +352,7 @@ def write_dataset_selection(
             "metadata_file": display_path(metadata_file),
             "source_urls": source_urls,
             "source_checksums": source_checksums,
-            "usage_terms_url": USAGE_TERMS_URLS.get(release),
+            "usage_terms_url": USAGE_TERMS_URL,
         }
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -384,6 +397,27 @@ def write_report(
     )
 
 
+def print_summary(
+    metadata_file: Path,
+    records: list[Metadata],
+    excluded: list[dict[str, Any]],
+    errors: list[str],
+    *,
+    written: bool,
+) -> None:
+    """In tóm tắt kết quả chuyển đổi."""
+    print()
+    print(f"Metadata      : {metadata_file if written else '(không ghi do có lỗi)'}")
+    print(f"Bản ghi       : {len(records)}")
+    print(f"Theo split    : {dict(Counter(record.split for record in records))}")
+    print(f"Ảnh bị loại   : {len(excluded)}")
+    print(f"Lỗi           : {len(errors)}")
+    if errors:
+        print("\nDanh sách lỗi (tối đa 20 dòng đầu):")
+        for message in errors[:20]:
+            print(f"  - {message}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -395,7 +429,11 @@ def parse_args() -> argparse.Namespace:
         help="Tệp captions_<split><year>.json. Lặp lại để nạp nhiều split.",
     )
     parser.add_argument("--dataset", required=True, help="Namespace, ví dụ coco2017.")
-    parser.add_argument("--release", type=int, help="Năm phát hành: 2014 hoặc 2017.")
+    parser.add_argument(
+        "--release",
+        type=int,
+        help=f"Năm phát hành. Chỉ hỗ trợ {SUPPORTED_RELEASE}.",
+    )
     parser.add_argument(
         "--split",
         choices=SPLIT_VALUES,
@@ -543,17 +581,32 @@ def main() -> int:
 
     all_records.sort(key=lambda record: record.id)
     metadata_file = output_dir / "metadata.jsonl"
-    write_metadata(all_records, metadata_file)
-
     release = str(next(iter(release_years))) if len(release_years) == 1 else None
+
+    # Luôn ghi báo cáo để còn dấu vết. Chỉ ghi metadata và dataset-selection khi không
+    # còn lỗi, tránh ghi đè kết quả tốt bằng bản thiếu bản ghi.
+    if all_errors:
+        write_report(
+            output_dir / "conversion-report.json",
+            dataset=args.dataset,
+            release=release,
+            inputs=inputs,
+            records=all_records,
+            errors=all_errors,
+            excluded=all_excluded,
+        )
+        print_summary(metadata_file, all_records, all_excluded, all_errors, written=False)
+        return 2
+
+    write_metadata(all_records, metadata_file)
     create_output_dirs(output_dir, splits, next(iter(release_years)) if release_years else None)
     if release is not None:
-        default_url = ALLOWED_SOURCE_URLS.get(release)
-        if default_url and default_url not in source_urls:
-            source_urls.append(default_url)
-        for split in splits:
-            url = (IMAGE_ROOT_URLS if split == "train" else IMAGE_ROOT_URLS_VAL).get(release)
-            if url and url not in source_urls:
+        default_urls = [SOURCE_ANNOTATION_URL]
+        default_urls.extend(
+            IMAGE_ROOT_URLS[split] for split in sorted(splits) if split in IMAGE_ROOT_URLS
+        )
+        for url in default_urls:
+            if url not in source_urls:
                 source_urls.append(url)
 
     write_dataset_selection(
@@ -575,18 +628,8 @@ def main() -> int:
         errors=all_errors,
         excluded=all_excluded,
     )
-
-    print()
-    print(f"Metadata      : {metadata_file}")
-    print(f"Bản ghi       : {len(all_records)}")
-    print(f"Theo split    : {dict(Counter(r.split for r in all_records))}")
-    print(f"Ảnh bị loại   : {len(all_excluded)}")
-    print(f"Lỗi           : {len(all_errors)}")
-    if all_errors:
-        print("\nDanh sách lỗi (tối đa 20 dòng đầu):")
-        for message in all_errors[:20]:
-            print(f"  - {message}")
-    return 2 if all_errors else 0
+    print_summary(metadata_file, all_records, all_excluded, all_errors, written=True)
+    return 0
 
 
 if __name__ == "__main__":
