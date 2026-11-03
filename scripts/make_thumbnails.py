@@ -137,7 +137,10 @@ def update_metadata(metadata_path: Path, data_root: Path) -> int:
     """Cập nhật thumbnail_path cho record có thumbnail; ghi .tmp rồi replace. Trả số record đổi."""
     changed = 0
     tmp_path = metadata_path.with_name(metadata_path.name + ".tmp")
-    with metadata_path.open(encoding="utf-8") as src, tmp_path.open("w", encoding="utf-8") as dst:
+    with (
+        metadata_path.open("r", encoding="utf-8", newline="") as src,
+        tmp_path.open("w", encoding="utf-8", newline="") as dst,
+    ):
         for line in src:
             stripped = line.strip()
             if not stripped:

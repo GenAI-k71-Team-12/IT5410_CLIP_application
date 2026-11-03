@@ -273,7 +273,7 @@ def test_main_splits_empty_means_all(tmp_path, monkeypatch):
     assert (root / "thumbnails" / "val" / "1.jpg").is_file()
 
 
-def test_update_metadata_keeps_unchanged_line_verbatim(tmp_path):
+def test_update_metadata_keeps_unchanged_line_verbatim_lf(tmp_path):
     root = tmp_path / "data"
     root.mkdir(parents=True)
     metadata = root / "metadata.jsonl"
@@ -285,6 +285,23 @@ def test_update_metadata_keeps_unchanged_line_verbatim(tmp_path):
         "thumbnail_path": None,
     }
     line = json.dumps(record, separators=(",", ":")) + "\n"
-    metadata.write_text(line, encoding="utf-8")
+    metadata.write_bytes(line.encode("utf-8"))
     assert thumbs.update_metadata(metadata, root) == 0
-    assert metadata.read_text(encoding="utf-8") == line
+    assert metadata.read_bytes() == line.encode("utf-8")
+
+
+def test_update_metadata_keeps_unchanged_line_verbatim_crlf(tmp_path):
+    root = tmp_path / "data"
+    root.mkdir(parents=True)
+    metadata = root / "metadata.jsonl"
+    record = {
+        "id": "coco2017:9",
+        "source_id": "9",
+        "split": "val",
+        "image_path": "images/val2017/9.jpg",
+        "thumbnail_path": None,
+    }
+    line = json.dumps(record, separators=(",", ":")) + "\r\n"
+    metadata.write_bytes(line.encode("utf-8"))
+    assert thumbs.update_metadata(metadata, root) == 0
+    assert metadata.read_bytes() == line.encode("utf-8")
