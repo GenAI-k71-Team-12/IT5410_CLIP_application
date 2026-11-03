@@ -195,7 +195,8 @@ như vocabulary/merges, resize/crop/interpolation/mean/std; đủ để tái t�
 Bản cấu hình chuẩn hóa phải được bàn giao để loader có thể đối chiếu.
 
 Manifest không chứa checksum của chính nó. Các file cấu hình bổ sung phải có tên tệp
-và checksum trong files khi triển khai. File manifest hiện chưa có schema/validator trong mã nguồn.
+và checksum trong files khi triển khai. Loader kiểm tra cấu trúc manifest, trường bắt buộc
+và định dạng được hỗ trợ tại `src/clip_retrieval/ml/artifact.py` trước khi đọc các tệp artifact.
 
 ### 4.3. Build và cache offline
 
@@ -247,6 +248,11 @@ Cấu hình thread, process hoặc worker được xác định khi tích hợp.
 - Thành phần được yêu cầu chưa sẵn sàng trả `EngineNotReady`; không tự chuyển phương pháp.
 
 ### 5.2. search_similar
+
+Backend hiện chỉ nối lời gọi `search_similar` qua `create_app(engine=...)`; catalog và
+media vẫn dùng `data/examples`. Endpoint `/images/{image_id}/similar` chưa phục vụ
+corpus ngoài demo. Phần tích hợp backend cần nạp metadata của cùng artifact và phục vụ
+ảnh dưới `dataset_root` trước khi dùng endpoint với dataset thật, theo mục 9.
 
 - `image_id` phải tồn tại trong snapshot và có embedding tương ứng.
 - Dùng embedding đã lưu của ảnh nguồn, không encode lại theo một pipeline khác.
