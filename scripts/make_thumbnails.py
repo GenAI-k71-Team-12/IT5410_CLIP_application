@@ -47,7 +47,11 @@ def render_thumbnail(src: Path, dest: Path, max_size: int, quality: int) -> None
     with Image.open(src) as im:
         im = ImageOps.exif_transpose(im)
         im.thumbnail((max_size, max_size), Image.LANCZOS)
-        if im.mode == "RGBA":
+        has_alpha = (
+            im.mode == "RGBA" or im.mode == "LA" or (im.mode == "P" and "transparency" in im.info)
+        )
+        if has_alpha:
+            im = im.convert("RGBA")
             background = Image.new("RGB", im.size, (255, 255, 255))
             background.paste(im, mask=im.split()[-1])
             im = background
@@ -144,7 +148,9 @@ def update_metadata(metadata_path: Path, data_root: Path) -> int:
             if (data_root / relpath).is_file() and record.get("thumbnail_path") != relpath:
                 record["thumbnail_path"] = relpath
                 changed += 1
-            dst.write(json.dumps(record, ensure_ascii=False) + "\n")
+                dst.write(json.dumps(record, ensure_ascii=False) + "\n")
+            else:
+                dst.write(line)
     tmp_path.replace(metadata_path)
     return changed
 
@@ -162,6 +168,7 @@ def _apply_limit(records: list[dict], limit: int) -> list[dict]:
 
 
 def _write_report(path: Path, report: ThumbnailReport, max_size: int, quality: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = report.as_dict()
     payload["max_size"] = max_size
     payload["quality"] = quality
@@ -186,12 +193,24 @@ def main() -> int:
     except SystemExit as exc:
         return 0 if exc.code == 0 else 1
 
+    # Lỗi tham số: file metadata không tồn tại.
+    if not args.metadata.is_file():
+        print(f"Không tìm thấy metadata: {args.metadata}")
+        _write_report(
+            args.data_root / "thumbnail-report.json",
+            ThumbnailReport(),
+            args.max_size,
+            args.quality,
+        )
+        return 1
+
+    splits = args.splits or None  # list rỗng == tất cả split
     report = ThumbnailReport()
     try:
         records = [
             record
             for record in iter_metadata(args.metadata)
-            if args.splits is None or record["split"] in args.splits
+            if splits is None or record["split"] in splits
         ]
         if args.limit > 0:
             records = _apply_limit(records, args.limit)
@@ -209,6 +228,8 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         report.failed += 1
         report.errors.append(str(exc))
+        _write_report(args.data_root / "thumbnail-report.json", report, args.max_size, args.quality)
+        return 1
 
     _write_report(args.data_root / "thumbnail-report.json", report, args.max_size, args.quality)
     print(

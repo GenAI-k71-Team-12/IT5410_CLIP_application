@@ -180,3 +180,111 @@ def test_main_end_to_end(tmp_path, monkeypatch):
     assert (root / "thumbnails" / "val" / "1.jpg").is_file()
     report = json.loads((root / "thumbnail-report.json").read_text(encoding="utf-8"))
     assert report["created"] == 1 and report["missing"] == 1
+
+
+def test_render_thumbnail_p_mode_transparency_white_background(tmp_path):
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    src = tmp_path / "src.png"
+    im = Image.new("P", (16, 16))
+    im.putpalette([0, 0, 0, 255, 0, 0] + [0] * 762)
+    im.info["transparency"] = 0
+    im.putdata([0] * (16 * 16))
+    im.save(src, "PNG", transparency=0)
+    dest = tmp_path / "thumb.jpg"
+    thumbs.render_thumbnail(src, dest, max_size=32, quality=80)
+    with Image.open(dest) as out:
+        assert out.mode == "RGB"
+        r, g, b = out.getpixel((0, 0))
+        assert r >= 245 and g >= 245 and b >= 245
+
+
+def test_main_metadata_missing_returns_1(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "make_thumbnails",
+            "--metadata",
+            str(tmp_path / "missing.jsonl"),
+            "--data-root",
+            str(tmp_path),
+        ],
+    )
+    assert thumbs.main() == 1
+
+
+def test_main_creates_report_when_data_root_new(tmp_path, monkeypatch):
+    metadata = tmp_path / "metadata.jsonl"
+    metadata.write_text("", encoding="utf-8")
+    data_root = tmp_path / "new_root"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "make_thumbnails",
+            "--metadata",
+            str(metadata),
+            "--data-root",
+            str(data_root),
+            "--workers",
+            "1",
+        ],
+    )
+    assert thumbs.main() == 0
+    assert (data_root / "thumbnail-report.json").is_file()
+
+
+def test_main_splits_empty_means_all(tmp_path, monkeypatch):
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    root = tmp_path / "data"
+    (root / "images" / "val2017").mkdir(parents=True)
+    Image.new("RGB", (64, 48), (1, 2, 3)).save(root / "images" / "val2017" / "1.jpg", "JPEG")
+    _write_metadata(
+        root / "metadata.jsonl",
+        [
+            {
+                "id": "coco2017:1",
+                "source_id": "1",
+                "split": "val",
+                "image_path": "images/val2017/1.jpg",
+                "thumbnail_path": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "make_thumbnails",
+            "--metadata",
+            str(root / "metadata.jsonl"),
+            "--data-root",
+            str(root),
+            "--splits",
+            "--workers",
+            "1",
+        ],
+    )
+    assert thumbs.main() == 0
+    assert (root / "thumbnails" / "val" / "1.jpg").is_file()
+
+
+def test_update_metadata_keeps_unchanged_line_verbatim(tmp_path):
+    root = tmp_path / "data"
+    root.mkdir(parents=True)
+    metadata = root / "metadata.jsonl"
+    record = {
+        "id": "coco2017:9",
+        "source_id": "9",
+        "split": "val",
+        "image_path": "images/val2017/9.jpg",
+        "thumbnail_path": None,
+    }
+    line = json.dumps(record, separators=(",", ":")) + "\n"
+    metadata.write_text(line, encoding="utf-8")
+    assert thumbs.update_metadata(metadata, root) == 0
+    assert metadata.read_text(encoding="utf-8") == line
