@@ -249,10 +249,9 @@ Cấu hình thread, process hoặc worker được xác định khi tích hợp.
 
 ### 5.2. search_similar
 
-Backend hiện chỉ nối lời gọi `search_similar` qua `create_app(engine=...)`; catalog và
-media vẫn dùng `data/examples`. Endpoint `/images/{image_id}/similar` chưa phục vụ
-corpus ngoài demo. Phần tích hợp backend cần nạp metadata của cùng artifact và phục vụ
-ảnh dưới `dataset_root` trước khi dùng endpoint với dataset thật, theo mục 9.
+Trong chế độ real, backend nạp catalog từ snapshot metadata trong artifact, phục vụ
+ảnh/thumbnail dưới `CLIP_DATASET_ROOT` và gọi engine đã nạp khi startup.
+`GET /images/{image_id}/similar` dùng cùng corpus với `POST /search`.
 
 - `image_id` phải tồn tại trong snapshot và có embedding tương ứng.
 - Dùng embedding đã lưu của ảnh nguồn, không encode lại theo một pipeline khác.

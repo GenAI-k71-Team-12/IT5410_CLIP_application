@@ -17,7 +17,11 @@ Lệnh cài đặt và khởi chạy: [README](../README.md).
 
 | Biến môi trường | Mặc định | Ý nghĩa |
 |---|---|---|
-| CLIP_MODE | mock | Chế độ thực thi. Giá trị real chưa được hỗ trợ |
+| CLIP_MODE | mock | `mock` dùng dữ liệu mẫu; `real` nạp CLIP và artifact khi khởi động |
+| `CLIP_ARTIFACT_DIR` | Không có | Thư mục artifact trong chế độ real |
+| `CLIP_DATASET_ROOT` | Không có | Thư mục gốc chứa ảnh/thumbnail theo snapshot metadata |
+| `CLIP_DEVICE` | cpu | Thiết bị nạp encoder: `cpu` hoặc `cuda` |
+| `CLIP_METHODS` | clip | Các phương pháp cần sẵn sàng, phân cách bằng dấu phẩy; BM25 chưa tích hợp |
 | `CLIP_CORS_ORIGINS` | http://localhost:3000,http://127.0.0.1:3000 | Danh sách origin cho phép, phân cách bằng dấu phẩy |
 
 `.env.example` cung cấp giá trị tham khảo. Ứng dụng đọc biến môi trường của tiến trình,
@@ -42,7 +46,8 @@ export CLIP_CORS_ORIGINS=http://localhost:3000
 - Sử dụng Ruff để lint và định dạng mã. Độ dài dòng tối đa: 100 ký tự.
 - OpenAPI và JSON Schema được xuất từ model trong `src/clip_retrieval/contracts.py`.
 - Định danh ảnh công khai sử dụng trường id theo schema Metadata.
-- Chế độ mock phải trả `mode=mock`. Ứng dụng từ chối `CLIP_MODE=real` khi chưa tích hợp mô hình và chỉ mục.
+- Chế độ mock trả `mode=mock`. Chế độ real nạp và kiểm tra artifact, model và catalog khi startup.
+  Nếu lỗi, `/health` trả `mode=real`, `ready=false`; các endpoint dữ liệu trả 503, không fallback mock.
 
 ## 4. Quản lý thay đổi
 

@@ -3,8 +3,8 @@
 # CLIP Image Retrieval
 
 Dự án tìm kiếm ảnh theo mô tả văn bản. Backend sử dụng FastAPI.
-Bản hiện tại gồm API mock, schema metadata, TypeScript client và dữ liệu mẫu.
-Các thành phần CLIP/FAISS, BM25 và frontend Next.js chưa được triển khai.
+Bản hiện tại gồm API mock và real, CLIP/FAISS, schema metadata và TypeScript client.
+BM25 và frontend Next.js chưa được triển khai.
 
 | Thành phần | Phiên bản |
 |---|---|
@@ -47,6 +47,34 @@ python3.12 -m venv .venv
 
 Health trong chế độ mock trả `data`.`mode=mock`, `data`.model_loaded=false và `data`.index_loaded=false.
 
+### Backend với CLIP thật
+
+Cài thêm `requirements-ml.txt`, chuẩn bị ảnh theo metadata và artifact đã kiểm tra
+theo [quy ước dữ liệu](docs/06_SHARED_DATA.md). Trong PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-ml.txt
+$env:CLIP_MODE='real'
+$env:CLIP_ARTIFACT_DIR='artifacts/coco2017-val-vitb32-v1'
+$env:CLIP_DATASET_ROOT='data/processed/coco2017'
+$env:CLIP_DEVICE='cpu'
+$env:CLIP_METHODS='clip'
+.\.venv\Scripts\python.exe -m uvicorn clip_retrieval.backend.app:app --host 127.0.0.1 --port 8000
+```
+
+Đường dẫn trên là ví dụ; thay bằng phiên bản đang dùng trong `docs/06_SHARED_DATA.md`.
+Linux/macOS dùng `export CLIP_MODE=real` và tương tự cho các biến còn lại.
+Ứng dụng không tự đọc `.env`. Mỗi worker nạp một model/index trong lifespan.
+`POST /search`, `GET /images/{id}` và `/similar` dùng snapshot của artifact;
+URL ảnh/thumbnail được phục vụ dưới `/media`. Thumbnail null dùng ảnh gốc.
+Chỉ các tệp ảnh/thumbnail có trong snapshot được phục vụ.
+
+Nạp thành công: `/health` báo `mode=real`, `ready=true`, `model_loaded=true`,
+`index_loaded=true`. Nếu cấu hình, artifact, model hoặc ảnh lỗi: health vẫn trả 200,
+`status=not_ready`, `ready=false`; các endpoint dữ liệu trả 503 và chi tiết được ghi log.
+Query quá giới hạn token trả 422. BM25 chưa được nạp trả 503; cấu hình
+`CLIP_METHODS=clip,bm25` khiến backend chưa ready cho tới khi BM25 được tích hợp.
+
 ### Dependency
 
 | Tệp | Nội dung |
@@ -86,7 +114,7 @@ Chi tiết endpoint, schema và mã trạng thái: [Đặc tả API](docs/03_END
 | Đường dẫn | Nội dung |
 |---|---|
 | `src/clip_retrieval/contracts.py` | Model Pydantic và schema dùng chung |
-| src/clip_retrieval/backend/ | Backend FastAPI mock |
+| src/clip_retrieval/backend/ | FastAPI, cấu hình, startup và catalog/media |
 | `src/clip_retrieval/retrieval.py` | Giao diện `RetrievalEngine` |
 | contracts/ | OpenAPI, JSON Schema, TypeScript client và ví dụ |
 | frontend/ | Thư mục frontend, chưa có ứng dụng Next.js |

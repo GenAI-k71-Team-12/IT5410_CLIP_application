@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "CLIP Image Retrieval — Mock Contract",
+    "title": "CLIP Image Retrieval",
     "version": "2.0.0"
   },
   "paths": {
@@ -571,6 +571,37 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "503": {
+            "headers": {
+              "X-Request-ID": {
+                "description": "Server-generated UUID for this request; also present on errors.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-API-Version": {
+                "schema": {
+                  "type": "string",
+                  "const": "2.0.0"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         }
       }
@@ -856,7 +887,7 @@
     "/media/{path}": {
       "get": {
         "operationId": "get_media",
-        "summary": "Download a fixture image (raw bytes)",
+        "summary": "Download an image or thumbnail (raw bytes)",
         "parameters": [
           {
             "name": "path",
@@ -869,7 +900,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Raw SVG; no JSON envelope",
+            "description": "Raw image; no JSON envelope",
             "headers": {
               "X-Request-ID": {
                 "description": "Server-generated UUID for this request; also present on errors.",
@@ -897,6 +928,24 @@
             },
             "content": {
               "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -985,6 +1034,37 @@
             }
           },
           "500": {
+            "description": "Error envelope",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Server-generated UUID for this request; also present on errors.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-API-Version": {
+                "schema": {
+                  "type": "string",
+                  "const": "2.0.0"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Error envelope",
             "headers": {
               "X-Request-ID": {

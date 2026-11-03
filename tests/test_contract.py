@@ -81,9 +81,12 @@ def test_similar_excludes_source_and_media_loads():
     assert client.get("/media/missing.svg").json()["statusCode"] == 404
 
 
-def test_real_mode_fails_closed():
-    with pytest.raises(RuntimeError):
-        create_app("real")
+def test_real_mode_without_configuration_is_not_ready(monkeypatch):
+    monkeypatch.delenv("CLIP_ARTIFACT_DIR", raising=False)
+    monkeypatch.delenv("CLIP_DATASET_ROOT", raising=False)
+    with TestClient(create_app("real")) as real_client:
+        assert real_client.get("/health").json()["data"]["ready"] is False
+        assert real_client.post("/search", json={"query": "dog"}).status_code == 503
 
 
 def test_metadata_jsonschema_and_semantics():
