@@ -164,6 +164,74 @@ def test_loader_rejects_tampered_artifact(tmp_path, tamper):
         load_artifact(path)
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "artifact_version",
+        "metadata_schema_version",
+        "created_at",
+        "subset_ids_sha256",
+        "model.weights_sha256",
+        "model.context_length",
+        "embedding.normalization",
+        "index.metric",
+        "build.dependency_lock_sha256",
+        "files.tokenizer_config",
+        "files.metadata.sha256",
+    ],
+)
+def test_loader_rejects_missing_manifest_fields(tmp_path, field):
+    path = build_toy(tmp_path)
+
+    def remove(manifest):
+        section = manifest
+        parts = field.split(".")
+        for part in parts[:-1]:
+            section = section[part]
+        del section[parts[-1]]
+
+    rewrite_manifest(path, remove)
+    with pytest.raises(ArtifactInvalid):
+        load_artifact(path)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("metadata_schema_version", "999.0.0"),
+        ("artifact_version", ""),
+        ("created_at", "yesterday"),
+        ("splits", "val"),
+        ("splits", []),
+        ("model.weights_sha256", "invalid"),
+        ("model.context_length", 0),
+        ("embedding.dtype", "float64"),
+        ("embedding.normalization", "none"),
+        ("embedding.count", True),
+        ("embedding.dimension", "4"),
+        ("index.library", "other"),
+        ("index.type", "IndexIDMap"),
+        ("index.metric", "l2"),
+        ("index.id_mapping", "external"),
+        ("build.batch_size", 0),
+        ("build.dependency_lock_sha256", "invalid"),
+    ],
+)
+def test_loader_rejects_invalid_manifest_values(tmp_path, field, value):
+    path = build_toy(tmp_path)
+
+    def change(manifest):
+        section = manifest
+        parts = field.split(".")
+        for part in parts[:-1]:
+            section = section[part]
+        section[parts[-1]] = value
+
+    rewrite_manifest(path, change)
+    with pytest.raises(ArtifactInvalid):
+        load_artifact(path)
+
+
 def test_verify_cli(tmp_path, monkeypatch, capsys):
     path = build_toy(tmp_path)
     monkeypatch.setattr("sys.argv", ["artifact", str(path)])
