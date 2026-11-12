@@ -1,8 +1,11 @@
 # tests/test_backend_bm25.py
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from clip_retrieval.backend.app import create_app
 from clip_retrieval.contracts import SearchRequest
+from clip_retrieval.keyword import Bm25RetrievalEngine
 from clip_retrieval.retrieval import RankedImage
 
 
@@ -75,3 +78,29 @@ def test_real_mode_without_matching_engine_returns_503():
     client = TestClient(create_app("real", bm25_engine=StubBm25()))
     response = client.post("/search", json={"query": "dog", "method": "clip"})
     assert response.status_code == 503
+
+
+def test_real_mode_bm25_only_similar_returns_503():
+    client = TestClient(create_app("real", bm25_engine=StubBm25()))
+    assert client.get("/images/demo:001/similar").status_code == 503
+
+
+def test_health_reports_real_mode_and_loaded_index():
+    client = TestClient(create_app("real", bm25_engine=StubBm25()))
+    health = client.get("/health").json()["data"]
+    assert health["mode"] == "real"
+    assert health["model_loaded"] is False
+    assert health["index_loaded"] is True
+
+
+def test_search_bm25_with_real_index_serves_example_catalog():
+    engine = Bm25RetrievalEngine.from_metadata(Path("data/examples/metadata.jsonl"))
+    client = TestClient(create_app("real", bm25_engine=engine))
+    data = client.post("/search", json={"query": "dog", "method": "bm25", "top_k": 2}).json()[
+        "data"
+    ]
+    assert data["mode"] == "real"
+    assert data["score_type"] == "bm25_score"
+    assert data["index_version"] == "bm25-v1-k1.2-b0.75"
+    assert data["results"][0]["image"]["id"] == "demo:001"
+    assert data["results"][0]["similarity"] is None

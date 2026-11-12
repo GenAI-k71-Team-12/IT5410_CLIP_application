@@ -110,6 +110,18 @@ def test_rank_honors_k1_parameter():
     ]
 
 
+def test_rank_honors_b_parameter():
+    records = [record("demo:a", ["dog cat"]), record("demo:b", ["dog"])]
+    assert [hit.image_id for hit in Bm25Index.from_records(records).rank("dog")] == [
+        "demo:b",
+        "demo:a",
+    ]
+    assert [hit.image_id for hit in Bm25Index.from_records(records, b=0.0).rank("dog")] == [
+        "demo:a",
+        "demo:b",
+    ]
+
+
 def test_rank_stopword_only_query_returns_empty():
     index = Bm25Index.from_records([record("demo:1", ["a dog"])])
     assert index.rank("the a an", top_k=5) == []

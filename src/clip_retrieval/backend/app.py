@@ -161,7 +161,11 @@ def create_app(
     def health(params: Annotated[NoQuery, Query()]):
         return SuccessResponse[Health](
             data=Health(
-                status="ok", mode="mock", ready=True, model_loaded=False, index_loaded=False
+                status="ok",
+                mode="real" if mode != "mock" else "mock",
+                ready=True,
+                model_loaded=engine is not None,
+                index_loaded=engine is not None or bm25_engine is not None,
             )
         )
 
@@ -269,6 +273,8 @@ def create_app(
         require_image(image_id)
         params = SearchRequest(query="similar", **filters.model_dump())
         if engine is None:
+            if mode == "real":
+                raise EngineNotReady("CLIP similar search is not loaded")
             data = page(params, request, mock_rank(params, exclude=image_id), None)
         else:
             ranked = engine.search_similar(image_id, params)

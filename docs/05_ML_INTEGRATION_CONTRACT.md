@@ -283,6 +283,7 @@ Index gần đúng dùng cho benchmark cần cấu hình và tiêu chí đánh g
 | Document | Nối toàn bộ `captions[].text` theo thứ tự bằng `"\n"`; một document mỗi ảnh |
 | Khoá | `image_id` = `Metadata.id`; corpus là snapshot metadata đang phục vụ |
 | Lọc | Áp dụng `dataset`/`split` trước khi cắt `top_k` |
+| IDF | `N` và `df` tính trên toàn corpus; bộ lọc chỉ giới hạn ứng viên được chấm điểm |
 | Thứ tự | Score giảm dần, hoà điểm sắp `Metadata.id` tăng dần |
 | Kết quả | Chỉ document có score > 0; trả tối đa `top_k` `RankedImage` |
 | API | `method=bm25`, `similarity=null`, `score_type=bm25_score`; `min_similarity` không áp dụng |

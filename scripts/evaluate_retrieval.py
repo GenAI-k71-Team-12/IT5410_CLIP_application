@@ -21,6 +21,7 @@ EXIT_OK = 0
 EXIT_METADATA = 1
 EXIT_EMPTY = 2
 EXIT_CLIP_UNAVAILABLE = 3
+EXIT_USAGE = 4
 
 CLIP_HINT = (
     "CLIP evaluation needs --artifact <dir> and the dependencies from "
@@ -158,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.top_k < 1:
         print("--top-k must be >= 1", file=sys.stderr)
-        return EXIT_METADATA
+        return EXIT_USAGE
 
     metadata_path = Path(args.metadata)
     if not metadata_path.is_file():
