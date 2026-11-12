@@ -273,14 +273,21 @@ Index gần đúng dùng cho benchmark cần cấu hình và tiêu chí đánh g
 
 ### 5.4. BM25
 
-Một ảnh tạo một document bằng cách nối `captions[].text` theo thứ tự bằng newline.
-Giữ toàn bộ caption, ID và corpus như snapshot. Ngôn ngữ, tokenizer, chuẩn hóa chữ,
-stopwords, công thức BM25, thư viện/phiên bản và tham số phải được ghi trong cấu hình BM25
-trước triển khai. Cấu hình BM25 chưa được xác nhận.
-
-BM25 trả score hữu hạn theo công thức đã chọn và similarity=null ở API.
-Có thể dựng lại BM25 khi startup từ snapshot và cấu hình; nếu lưu index riêng,
-phải bàn giao định dạng, phiên bản và checksum, không dùng tệp pickle không xác định.
+| Tham số | Quy định |
+|---|---|
+| Thư viện | Không dùng thư viện ngoài; cài đặt Okapi BM25 bằng Python chuẩn tại `clip_retrieval.keyword` |
+| Tokenizer | `lowercase` + `re.findall(r"\w+")` (Unicode-aware) rồi bỏ stopwords |
+| Stopwords | Danh sách tiếng Anh cố định trong `clip_retrieval.keyword.STOPWORDS` |
+| Công thức | Okapi BM25: `idf = ln(1 + (N - df + 0.5)/(df + 0.5))`; `score = Σ idf * tf*(k1+1) / (tf + k1*(1-b+b*dl/avgdl))` |
+| Tham số | `k1 = 1.2`, `b = 0.75` |
+| Document | Nối toàn bộ `captions[].text` theo thứ tự bằng `"\n"`; một document mỗi ảnh |
+| Khoá | `image_id` = `Metadata.id`; corpus là snapshot metadata đang phục vụ |
+| Lọc | Áp dụng `dataset`/`split` trước khi cắt `top_k` |
+| Thứ tự | Score giảm dần, hoà điểm sắp `Metadata.id` tăng dần |
+| Kết quả | Chỉ document có score > 0; trả tối đa `top_k` `RankedImage` |
+| API | `method=bm25`, `similarity=null`, `score_type=bm25_score`; `min_similarity` không áp dụng |
+| Index | Dựng lại từ snapshot khi startup; baseline không lưu index riêng |
+| `index_version` | `bm25-v1-k1.2-b0.75` |
 
 ## 6. Cache truy vấn
 
