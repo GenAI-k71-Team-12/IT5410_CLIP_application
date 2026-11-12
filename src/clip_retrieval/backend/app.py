@@ -32,10 +32,14 @@ from clip_retrieval.retrieval import EngineNotReady, ImageNotFound, RankedImage,
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def create_app(mode: str | None = None, engine: RetrievalEngine | None = None) -> FastAPI:
+def create_app(
+    mode: str | None = None,
+    engine: RetrievalEngine | None = None,
+    bm25_engine: RetrievalEngine | None = None,
+) -> FastAPI:
     # An injected engine serves /similar for real; startup loading belongs to real-mode setup.
     mode = mode or os.getenv("CLIP_MODE", "mock")
-    if mode != "mock" and engine is None:
+    if mode != "mock" and engine is None and bm25_engine is None:
         raise RuntimeError(
             "Only mock mode is implemented; real engine must be integrated explicitly"
         )
@@ -224,9 +228,21 @@ def create_app(mode: str | None = None, engine: RetrievalEngine | None = None) -
         summary="Search images by text (CLIP or BM25)",
     )
     def search(params: SearchRequest, request: Request, query: Annotated[NoQuery, Query()]):
-        return SuccessResponse[SearchResponse](
-            data=page(params, request, mock_rank(params), params.query)
-        )
+        if params.method == "bm25" and bm25_engine is not None:
+            ranked = bm25_engine.search_text(params)
+            return SuccessResponse[SearchResponse](
+                data=page(params, request, ranked, params.query, "real", bm25_engine.index_version)
+            )
+        if params.method == "clip" and engine is not None:
+            ranked = engine.search_text(params)
+            index_version = engine.index_version
+            return SuccessResponse[SearchResponse](
+                data=page(params, request, ranked, params.query, "real", index_version)
+            )
+        if mode == "real":
+            raise EngineNotReady(f"Method {params.method} is not loaded")
+        ranked = mock_rank(params)
+        return SuccessResponse[SearchResponse](data=page(params, request, ranked, params.query))
 
     @app.get(
         "/images/{image_id}",
