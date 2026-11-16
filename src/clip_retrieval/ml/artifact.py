@@ -8,11 +8,13 @@ import json
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal
 
 import faiss
 import numpy as np
+from pydantic import BaseModel, ConfigDict, Field
 
-from clip_retrieval.contracts import Metadata, utc_timestamp
+from clip_retrieval.contracts import Metadata, Timestamp, utc_timestamp
 from clip_retrieval.ml import index as faiss_index
 from clip_retrieval.ml.checksum import canonical_json, sha256_file
 from clip_retrieval.ml.encoder import ClipEncoder, Encoder
@@ -25,6 +27,69 @@ DATA_FILES = {
     "image_ids": "image_ids.json",
     "index": "index.faiss",
 }
+
+
+Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+PositiveInt = Annotated[int, Field(gt=0)]
+
+
+class _ManifestSection(BaseModel):
+    model_config = ConfigDict(strict=True, str_min_length=1)
+
+
+class _ModelInfo(_ManifestSection):
+    library: str
+    library_version: str
+    name: str
+    weights_id: str
+    weights_sha256: Digest
+    tokenizer_id: str
+    tokenizer_config_sha256: Digest
+    context_length: PositiveInt
+    preprocess_id: str
+    preprocess_config_sha256: Digest
+
+
+class _EmbeddingInfo(_ManifestSection):
+    dimension: PositiveInt
+    dtype: Literal["float32"]
+    normalization: Literal["l2"]
+    count: PositiveInt
+
+
+class _IndexInfo(_ManifestSection):
+    library: Literal["faiss"]
+    library_version: str
+    type: Literal["IndexFlatIP"]
+    metric: Literal["inner_product"]
+    id_mapping: Literal["row"]
+
+
+class _BuildInfo(_ManifestSection):
+    device: str
+    batch_size: PositiveInt
+    seed: int
+    dependency_lock_sha256: Digest
+
+
+class _FileInfo(_ManifestSection):
+    path: str
+    sha256: Digest
+
+
+class _Manifest(_ManifestSection):
+    manifest_version: Literal["1.0.0"]
+    artifact_version: str
+    metadata_schema_version: Literal["1.0.0"]
+    dataset: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")]
+    splits: Annotated[list[Literal["train", "val", "test", "unspecified"]], Field(min_length=1)]
+    subset_ids_sha256: Digest | None
+    created_at: Timestamp
+    model: _ModelInfo
+    embedding: _EmbeddingInfo
+    index: _IndexInfo
+    build: _BuildInfo
+    files: dict[str, _FileInfo]
 
 
 @dataclass(frozen=True)
@@ -124,7 +189,9 @@ def _placeholders(value: object, key: str = "") -> Iterator[str]:
 
 def _load(path: Path) -> Artifact:
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-    _require(manifest["manifest_version"] == MANIFEST_VERSION, "Unsupported manifest_version")
+    _Manifest.model_validate(manifest)
+    required_files = set(DATA_FILES) | {"tokenizer_config", "preprocess_config"}
+    _require(required_files <= manifest["files"].keys(), "Manifest is missing required files")
     placeholders = sorted(set(_placeholders(manifest)))
     _require(not placeholders, f"Manifest has placeholder values: {placeholders}")
     files = {}
