@@ -73,9 +73,10 @@ def test_unknown_catalog_image_is_404_without_engine_call():
     assert result.status_code == 404 and engine.calls == []
 
 
-def test_search_and_health_stay_mock_until_real_startup_exists():
+def test_search_without_matching_engine_stays_mock():
     client = TestClient(create_app(engine=StubEngine()))
-    assert client.post("/search", json={"query": "dog"}).json()["data"]["mode"] == "mock"
+    data = client.post("/search", json={"query": "dog", "method": "bm25"}).json()["data"]
+    assert data["mode"] == "mock"
     assert client.get("/health").json()["data"]["mode"] == "mock"
 
 
