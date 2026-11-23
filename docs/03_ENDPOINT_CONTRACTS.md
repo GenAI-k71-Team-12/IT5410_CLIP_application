@@ -81,7 +81,7 @@ Lỗi nội bộ trả thông báo `Internal server error`; chi tiết ngoại l
 | 415 | Unsupported Media Type | Thiếu hoặc sai Content-Type tại POST /search |
 | 422 | Unprocessable Entity | Body, path hoặc query không hợp lệ |
 | 500 | Internal Server Error | Lỗi xử lý nội bộ |
-| 503 | Service Unavailable | Dành cho backend tích hợp ML khi chưa sẵn sàng. Chế độ mock chưa trả mã này |
+| 503 | Service Unavailable | Backend real chưa sẵn sàng hoặc phương pháp được yêu cầu chưa nạp |
 
 ## 2. Header
 
@@ -102,7 +102,7 @@ Server không từ chối các header ngoài danh sách trên.
 
 | Header | Áp dụng | Quy định |
 |---|---|---|
-| Content-Type | Phản hồi có body | `application/json` cho dữ liệu/lỗi; `image/svg+xml` cho ảnh mẫu |
+| Content-Type | Phản hồi có body | `application/json` cho dữ liệu/lỗi; MIME của tệp cho ảnh/thumbnail |
 | X-Request-ID | JSON và tài nguyên ảnh, bao gồm lỗi | UUID được cấp mới cho mỗi request |
 | X-API-Version | JSON và tài nguyên ảnh, bao gồm lỗi | `2.0.0` |
 | Cache-Control | Phản hồi JSON, bao gồm lỗi | `no-store` |
@@ -205,6 +205,10 @@ ID sai định dạng trả `422`. ID hợp lệ nhưng không tồn tại trả
 
 Trong chế độ mock: `status=ok`, `ready=true`, `model_loaded=false`, `index_loaded=false`.
 
+Trong chế độ real, health phản ánh kết quả startup. Khi chưa sẵn sàng:
+`status=not_ready`, `ready=false`; model_loaded/index_loaded báo riêng từng bước nạp.
+Các endpoint tìm kiếm, metadata và media trả 503 cho tới khi catalog và engine sẵn sàng.
+
 ### 4.2. POST /search
 
 **Chức năng:** Tìm ảnh theo văn bản.
@@ -254,7 +258,7 @@ Content-Type: application/json
 
 **Phản hồi 200:** `data` theo schema `ImagePublic`.
 
-**Mã phản hồi:** 200, 404, 405, 422, 500.
+**Mã phản hồi:** 200, 404, 405, 422, 500, 503.
 
 ### 4.4. GET /images/{`image_id`}/similar
 
@@ -286,17 +290,20 @@ Accept: application/json
 
 ### 4.5. GET /media/{path}
 
-**Chức năng:** Tải tài nguyên ảnh mẫu.
+**Chức năng:** Tải ảnh gốc hoặc thumbnail có trong catalog.
 
-**Path parameter:** `path: string`, đường dẫn tương đối dưới thư mục ảnh mẫu.
+**Path parameter:** `path: string`, đường dẫn tương đối của ảnh/thumbnail trong catalog.
+Chế độ real dùng `image_path`/`thumbnail_path` trong snapshot và phân giải dưới
+`CLIP_DATASET_ROOT`. Không phục vụ tệp ngoài catalog hoặc ngoài thư mục gốc.
 
-**Phản hồi 200:** Nội dung SVG; Content-Type: image/svg+xml.
+**Phản hồi 200:** Nội dung tệp ảnh; Content-Type tương ứng định dạng, ví dụ image/jpeg,
+image/png, image/webp hoặc image/svg+xml cho ảnh demo.
 
 **Phản hồi 304:** Không có body.
 
 **Phản hồi lỗi:** Theo cấu trúc tại mục 1.2.
 
-**Mã phản hồi:** 200, 304, 404, 405, 500.
+**Mã phản hồi:** 200, 304, 404, 405, 500, 503.
 
 HEAD được hỗ trợ, trả header tương ứng GET và không có body.
 HEAD không được hỗ trợ tại các endpoint JSON.

@@ -80,6 +80,6 @@ def test_search_without_matching_engine_stays_mock():
     assert client.get("/health").json()["data"]["mode"] == "mock"
 
 
-def test_real_mode_without_engine_still_fails_closed():
-    with pytest.raises(RuntimeError):
-        create_app("real")
+def test_real_mode_before_startup_does_not_serve_demo():
+    client = TestClient(create_app("real"))
+    assert client.get("/images/demo:001/similar").status_code == 503
