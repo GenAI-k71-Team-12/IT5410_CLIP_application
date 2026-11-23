@@ -1,9 +1,9 @@
-"""Explicit fixture API for integration. No CLIP weights, FAISS or BM25 loaded."""
+"""API v2 with explicit mock mode and artifact-backed retrieval."""
 
-import json
 import logging
+import math
 import os
-from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import uuid4
 
@@ -11,15 +11,16 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from clip_retrieval.backend.config import Settings
+from clip_retrieval.backend.runtime import BackendRuntime, CatalogMedia
 from clip_retrieval.contracts import (
     ErrorResponse,
     Health,
     ImageId,
     ImagePublic,
-    Metadata,
     NoQuery,
     SearchHit,
     SearchRequest,
@@ -27,42 +28,37 @@ from clip_retrieval.contracts import (
     SimilarRequest,
     SuccessResponse,
 )
-from clip_retrieval.retrieval import EngineNotReady, ImageNotFound, RankedImage, RetrievalEngine
-
-ROOT = Path(__file__).resolve().parents[3]
+from clip_retrieval.retrieval import (
+    EngineNotReady,
+    ImageNotFound,
+    QueryTooLong,
+    RankedImage,
+    RetrievalEngine,
+    RetrievalFailure,
+)
 
 
 def create_app(
     mode: str | None = None,
     engine: RetrievalEngine | None = None,
     bm25_engine: RetrievalEngine | None = None,
+    *,
+    settings: Settings | None = None,
 ) -> FastAPI:
-    # An injected engine serves /similar for real; startup loading belongs to real-mode setup.
-    mode = mode or os.getenv("CLIP_MODE", "mock")
-    if mode != "mock" and engine is None and bm25_engine is None:
-        raise RuntimeError(
-            "Only mock mode is implemented; real engine must be integrated explicitly"
-        )
-    app = FastAPI(title="CLIP Image Retrieval — Mock Contract", version="2.0.0")
-    records = [
-        Metadata.model_validate(json.loads(line))
-        for line in (ROOT / "data/examples/metadata.jsonl").read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    images = {
-        item.id: ImagePublic(
-            id=item.id,
-            dataset=item.dataset,
-            split=item.split,
-            width=item.width,
-            height=item.height,
-            captions=item.captions,
-            image_url=f"/media/{item.source_id}.svg",
-            thumbnail_url=f"/media/{item.source_id}.svg",
-        )
-        for item in records
-    }
-    app.mount("/media", StaticFiles(directory=ROOT / "data/examples/media"), name="media")
+    settings = settings or Settings.from_env(mode)
+    runtime = BackendRuntime(settings, engine, bm25_engine)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await run_in_threadpool(runtime.start)
+        try:
+            yield
+        finally:
+            runtime.stop()
+
+    app = FastAPI(title="CLIP Image Retrieval", version="2.0.0", lifespan=lifespan)
+    app.state.runtime = runtime
+    app.mount("/media", CatalogMedia(runtime), name="media")
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
@@ -114,6 +110,10 @@ def create_app(
     async def engine_not_ready(request: Request, exc: EngineNotReady):
         return error(request, 503, ["Retrieval engine is not ready"])
 
+    @app.exception_handler(QueryTooLong)
+    async def query_too_long(request: Request, exc: QueryTooLong):
+        return error(request, 422, [str(exc)])
+
     @app.exception_handler(Exception)
     async def internal_error(request: Request, exc: Exception):
         logging.getLogger(__name__).error(
@@ -159,26 +159,19 @@ def create_app(
         summary="Get API readiness",
     )
     def health(params: Annotated[NoQuery, Query()]):
-        return SuccessResponse[Health](
-            data=Health(
-                status="ok",
-                mode="real" if mode != "mock" else "mock",
-                ready=True,
-                model_loaded=engine is not None,
-                index_loaded=engine is not None or bm25_engine is not None,
-            )
-        )
+        return SuccessResponse[Health](data=runtime.health())
 
     def require_image(image_id):
-        if image_id not in images:
+        runtime.require_ready()
+        if image_id not in runtime.images:
             raise HTTPException(status_code=404, detail="Image not found")
-        return images[image_id]
+        return runtime.images[image_id]
 
     def mock_rank(params: SearchRequest, exclude=None) -> list[RankedImage]:
         # Fixed scores are test fixtures; query does not change ordering in mock mode.
         pool = [
             RankedImage(item.id, 0.9 - i * 0.15)
-            for i, item in enumerate(images.values())
+            for i, item in enumerate(runtime.images.values())
             if item.id != exclude
             and (params.dataset is None or item.dataset == params.dataset)
             and (params.split is None or item.split == params.split)
@@ -198,10 +191,20 @@ def create_app(
         mode: str = "mock",
         index_version: str = "mock-v1",
     ):
+        ids = [hit.image_id for hit in ranked]
+        if (
+            len(ranked) > params.top_k
+            or len(set(ids)) != len(ids)
+            or any(image_id not in runtime.images for image_id in ids)
+            or any(not math.isfinite(hit.score) for hit in ranked)
+            or (params.method == "clip" and any(abs(hit.score) > 1 for hit in ranked))
+            or ranked != sorted(ranked, key=lambda hit: (-hit.score, hit.image_id))
+        ):
+            raise RetrievalFailure("Invalid engine result pool")
         hits = [
             SearchHit(
                 rank=i + params.offset + 1,
-                image=images[hit.image_id],
+                image=runtime.images[hit.image_id],
                 score=round(hit.score, 6),
                 similarity=round(hit.score, 6) if params.method == "clip" else None,
             )
@@ -232,26 +235,23 @@ def create_app(
         summary="Search images by text (CLIP or BM25)",
     )
     def search(params: SearchRequest, request: Request, query: Annotated[NoQuery, Query()]):
-        if params.method == "bm25" and bm25_engine is not None:
-            ranked = bm25_engine.search_text(params)
+        runtime.require_ready()
+        selected = runtime.engine_for(params.method)
+        if selected is not None:
+            ranked = selected.search_text(params)
             return SuccessResponse[SearchResponse](
-                data=page(params, request, ranked, params.query, "real", bm25_engine.index_version)
+                data=page(params, request, ranked, params.query, "real", selected.index_version)
             )
-        if params.method == "clip" and engine is not None:
-            ranked = engine.search_text(params)
-            index_version = engine.index_version
-            return SuccessResponse[SearchResponse](
-                data=page(params, request, ranked, params.query, "real", index_version)
-            )
-        if mode == "real":
+        if settings.mode == "real":
             raise EngineNotReady(f"Method {params.method} is not loaded")
-        ranked = mock_rank(params)
-        return SuccessResponse[SearchResponse](data=page(params, request, ranked, params.query))
+        return SuccessResponse[SearchResponse](
+            data=page(params, request, mock_rank(params), params.query)
+        )
 
     @app.get(
         "/images/{image_id}",
         response_model=SuccessResponse[ImagePublic],
-        responses=responses(404, 405, 422, 500),
+        responses=responses(404, 405, 422, 500, 503),
         dependencies=[Depends(common_headers)],
         summary="Get public image metadata",
     )
@@ -272,13 +272,15 @@ def create_app(
     ):
         require_image(image_id)
         params = SearchRequest(query="similar", **filters.model_dump())
-        if engine is None:
-            if mode == "real":
-                raise EngineNotReady("CLIP similar search is not loaded")
+        if runtime.engine is None:
+            if settings.mode == "real":
+                raise EngineNotReady("Method clip is not loaded")
             data = page(params, request, mock_rank(params, exclude=image_id), None)
         else:
-            ranked = engine.search_similar(image_id, params)
-            data = page(params, request, ranked, None, "real", engine.index_version)
+            ranked = runtime.engine.search_similar(image_id, params)
+            if any(hit.image_id == image_id for hit in ranked):
+                raise RetrievalFailure("Similar results contain the source image")
+            data = page(params, request, ranked, None, "real", runtime.engine.index_version)
         return SuccessResponse[SearchResponse](data=data)
 
     # StaticFiles mounts are not exported by FastAPI; describe the media endpoint explicitly.
@@ -290,20 +292,21 @@ def create_app(
         schema["paths"]["/media/{path}"] = {
             "get": {
                 "operationId": "get_media",
-                "summary": "Download a fixture image (raw bytes)",
+                "summary": "Download an image or thumbnail (raw bytes)",
                 "parameters": [
                     {"name": "path", "in": "path", "required": True, "schema": {"type": "string"}}
                 ],
                 "responses": {
                     "200": {
-                        "description": "Raw SVG; no JSON envelope",
+                        "description": "Raw image; no JSON envelope",
                         "headers": {
                             **media_headers,
                             "ETag": {"schema": {"type": "string"}},
                             "Last-Modified": {"schema": {"type": "string"}},
                         },
                         "content": {
-                            "image/svg+xml": {"schema": {"type": "string", "format": "binary"}}
+                            mime: {"schema": {"type": "string", "format": "binary"}}
+                            for mime in ("image/svg+xml", "image/jpeg", "image/png", "image/webp")
                         },
                     },
                     "304": {
@@ -320,7 +323,7 @@ def create_app(
                                 }
                             },
                         }
-                        for status in (404, 405, 500)
+                        for status in (404, 405, 500, 503)
                     },
                 },
             }
